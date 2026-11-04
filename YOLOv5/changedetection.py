@@ -6,7 +6,10 @@ from pathlib import Path
 
 
 class ChangeDetection:
-    HOST = "http://127.0.0.1:8000"
+    HOST = os.getenv(
+        "DJANGO_HOST",
+        "http://127.0.0.1:8000"
+    )
 
     username = os.getenv("DJANGO_USERNAME", "admin")
     password = os.getenv("DJANGO_PASSWORD")
