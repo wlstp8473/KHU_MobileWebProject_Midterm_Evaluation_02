@@ -150,7 +150,7 @@ def run(
     """
     #서버 전송 임계값 추가
     post_conf_threshold = float(
-        os.getenv("POST_CONF_THRESHOLD", "0.70")
+        os.getenv("POST_CONF_THRESHOLD", "0.50")
     )
 
     if not 0.0 <= post_conf_threshold <= 1.0:
