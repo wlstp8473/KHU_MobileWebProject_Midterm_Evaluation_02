@@ -1,6 +1,7 @@
 import os
 import cv2
 import requests
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -22,6 +23,26 @@ class ChangeDetection:
         # 각 클래스의 이전 검출 상태를 저장
         # 0 = 미검출, 1 = 검출
         self.result_prev = [0 for _ in range(len(names))]
+
+        # 동일 객체의 서버 재전송 대기시간
+        self.cooldown_seconds = float(
+            os.getenv("POST_COOLDOWN_SECONDS", "30")
+        )
+
+        if self.cooldown_seconds < 0:
+            raise ValueError(
+                "POST_COOLDOWN_SECONDS는 0 이상이어야 합니다."
+            )
+
+        # 클래스별 마지막 서버 전송 시각
+        self.last_sent_time = [
+            0.0 for _ in range(len(names))
+        ]
+
+        print(
+            f"Server POST cooldown: "
+            f"{self.cooldown_seconds:.0f} seconds"
+        )
 
         if not self.password:
             raise RuntimeError(
@@ -48,14 +69,28 @@ class ChangeDetection:
         self.text = ""
 
         change_flag = 0
+        current_time = time.monotonic()
+        send_classes = []
 
         for i in range(len(self.result_prev)):
             # 이전에는 없었는데 현재 새로 나타난 객체
             if self.result_prev[i] == 0 and detected_current[i] == 1:
-                change_flag = 1
 
-                self.title = names[i]
-                self.text += names[i] + ", "
+                elapsed = current_time - self.last_sent_time[i]
+
+                # Cooldown 시간이 지난 객체만 서버 전송 대상
+                if elapsed >= self.cooldown_seconds:
+                    change_flag = 1
+                    send_classes.append(i)
+
+                    self.title = names[i]
+                    self.text += names[i] + ", "
+                else:
+                    print(
+                        f"POST skipped: {names[i]} "
+                        f"(cooldown {elapsed:.1f}/"
+                        f"{self.cooldown_seconds:.1f}s)"
+                    )
 
         # 현재 상태를 다음 프레임 비교용으로 저장
         self.result_prev = detected_current[:]
@@ -63,6 +98,10 @@ class ChangeDetection:
         # 새로운 객체가 나타난 경우에만 서버 전송
         if change_flag == 1:
             self.send(save_dir, image)
+
+            # 실제 전송 대상으로 선택된 클래스만 시간 갱신
+            for i in send_classes:
+                self.last_sent_time[i] = current_time
 
     def send(self, save_dir, image):
         now = datetime.now()
