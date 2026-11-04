@@ -148,6 +148,21 @@ def run(
         run(source='data/videos/example.mp4', weights='yolov5s.pt', conf_thres=0.4, device='0')
         ```
     """
+    #서버 전송 임계값 추가
+    post_conf_threshold = float(
+        os.getenv("POST_CONF_THRESHOLD", "0.70")
+    )
+
+    if not 0.0 <= post_conf_threshold <= 1.0:
+        raise ValueError(
+            "POST_CONF_THRESHOLD는 0.0 ~ 1.0 사이여야 합니다."
+        )
+
+    LOGGER.info(
+        f"Server POST confidence threshold: "
+        f"{post_conf_threshold:.2f}"
+    )
+        
     source = str(source)
     is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
     is_url = source.lower().startswith(("rtsp://", "rtmp://", "http://", "https://"))
@@ -263,11 +278,13 @@ def run(
                 for *xyxy, conf, cls in reversed(det):
                     c = int(cls)  # integer class
 
-                    detected[c] = 1
-
                     label = names[c]
                     confidence = float(conf)
                     confidence_str = f"{confidence:.2f}"
+
+                    # 서버 전송용 Confidence 임계값 적용
+                    if confidence >= post_conf_threshold:
+                        detected[c] = 1
 
                     if save_csv:
                         write_to_csv(p.name, label, confidence_str)
